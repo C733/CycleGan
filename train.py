@@ -46,7 +46,7 @@ class LossNetwork(torch.nn.Module):
 
 
         
-def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d_scaler, g_scaler, vgg_loss = True):
+def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d_scaler, g_scaler, vgg_loss_val):
     H_reals = 0
     H_fakes = 0
     loop = tqdm(loader, leave=True)
@@ -103,17 +103,19 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
             cycle_horse_loss = l1(horse, cycle_horse)
             # print(loss_G_Z)
             # print(zebra.shape)
-
-            if vgg_loss:
+            # print(vgg_loss_val)
+            if vgg_loss_val:
+                print("using vgg loss")
                 cycle_zebra_loss, output_features = vgg_loss(zebra, cycle_zebra)
                 cycle_horse_loss, output_features = vgg_loss(horse, cycle_horse)
                 cycle_zebra_loss *= 100
                 cycle_horse_loss *= 100
             else:
+                print("using l1 loss")
                 cycle_zebra_loss = l1(zebra, cycle_zebra)
                 cycle_horse_loss = l1(horse, cycle_horse)
-            print(cycle_zebra_loss)
-            print(cycle_horse_loss)
+            # print(cycle_zebra_loss)
+            # print(cycle_horse_loss)
             # print(vgg_loss_zebra)
             # identity loss (remove these for efficiency if you set lambda_identity=0)
             # identity_zebra = gen_Z(zebra)
@@ -193,7 +195,7 @@ def main():
     loader = DataLoader(
         dataset,
         batch_size=config.BATCH_SIZE,
-        shuffle=True,
+        shuffle=False,
         num_workers=config.NUM_WORKERS,
         pin_memory=True
     )
@@ -201,7 +203,7 @@ def main():
     d_scaler = torch.cuda.amp.GradScaler()
 
     for epoch in range(config.NUM_EPOCHS):
-        train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, L1, mse, d_scaler, g_scaler,vgg_loss=True)
+        train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, L1, mse, d_scaler, g_scaler,vgg_loss_val=False)
 
         if config.SAVE_MODEL:
             save_checkpoint(gen_H, opt_gen, filename=config.CHECKPOINT_GEN_H)
