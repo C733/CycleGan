@@ -1,3 +1,4 @@
+from turtle import color
 import torch
 from dataset import HorseZebraDataset
 import sys
@@ -13,52 +14,47 @@ from generator_model import Generator
 import torch.nn.functional as F
 from torchvision import datasets, models, transforms
 
-class LossNetwork(torch.nn.Module):
-    def __init__(self, vgg_model):
-        super(LossNetwork, self).__init__()
-        self.vgg_layers = vgg_model
-        self.layer_name_mapping = {
-            '3': "relu1_2",
-            '8': "relu2_2",
-            '13': "relu3_2",
-            '22': "relu4_2",
-            '31': "relu5_2"
-        }
-        self.weight =[1.0,1.0,1.0,1.0,1.0]
-    def output_features(self, x):
-        output = {}
-        for name, module in self.vgg_layers._modules.items():
-            # print("vgg_layers name:",name,module)
-            x = x.type(torch.FloatTensor)
-            x = module(x)
-            if name in self.layer_name_mapping:
-                output[self.layer_name_mapping[name]] = x
-        print(output.keys())
-        return list(output.values())
+def rgb_to_yuv(image: torch.Tensor) -> torch.Tensor:
+    r"""Convert an RGB image to YUV.
 
-    def forward(self, output, gt):
-        loss = []
-        output_features = self.output_features(output)
-        gt_features = self.output_features(gt)
-        for iter,(dehaze_feature, gt_feature,loss_weight) in enumerate(zip(output_features, gt_features,self.weight)):
-            loss.append(F.mse_loss(dehaze_feature, gt_feature)*loss_weight)
-        return sum(loss),output_features  #/len(loss)
+    .. image:: _static/img/rgb_to_yuv.png
 
+    The image data is assumed to be in the range of (0, 1).
 
-        
-if __name__ == "__main__":
+    Args:
+        image: RGB Image to be converted to YUV with shape :math:`(*, 3, H, W)`.
 
-    vgg_model = models.vgg19(pretrained=False).features[:]
-    vgg_model.load_state_dict(torch.load('vgg_loss.pth'),strict=False)
-    vgg_model.eval()
-    for param in vgg_model.parameters():
-        param.requires_grad = False 
-    vgg_loss = LossNetwork(vgg_model)
-    # print(vgg_model)
-    x = torch.rand([4, 3,256,256])
-    y = torch.rand([4, 3,256,256])
-    print(vgg_loss(x,y))
+    Returns:
+        YUV version of the image with shape :math:`(*, 3, H, W)`.
+
+    Example:
+        >>> input = torch.rand(2, 3, 4, 5)
+        >>> output = rgb_to_yuv(input)  # 2x3x4x5
+    """
+    if not isinstance(image, torch.Tensor):
+        raise TypeError(f"Input type is not a torch.Tensor. Got {type(image)}")
+
+    if len(image.shape) < 3 or image.shape[-3] != 3:
+        raise ValueError(f"Input size must have a shape of (*, 3, H, W). Got {image.shape}")
+
+    r: torch.Tensor = image[..., 0, :, :]
+    g: torch.Tensor = image[..., 1, :, :]
+    b: torch.Tensor = image[..., 2, :, :]
+
+    y: torch.Tensor = 0.299 * r + 0.587 * g + 0.114 * b
+    u: torch.Tensor = -0.147 * r - 0.289 * g + 0.436 * b
+    v: torch.Tensor = 0.615 * r - 0.515 * g - 0.100 * b
+
+    out: torch.Tensor = torch.stack([y, u, v], -3)
+
+    return out
+def color_loss(con, fake):
+    con = rgb_to_yuv(con)
+    fake = rgb_to_yuv(fake)
+    print(con.shape)
+    return F.l1_loss(con[:,0,:,:], fake[:,0,:,:]) + F.huber_loss(con[:,1,:,:],fake[:,1,:,:]) + F.huber_loss(con[:,2,:,:],fake[:,2,:,:]) 
 
 
-
-    
+x = torch.rand((1,3,256,256))
+y = torch.rand((1,3,256,256))
+print(color_loss(x,y))

@@ -6,3 +6,6 @@ genz.pth.tar
 /archive
 /checkpoint
 vgg_loss.pth
+/arcane_data
+/results
+/saved_images

@@ -13,6 +13,30 @@ from generator_model import Generator
 import torch.nn.functional as F
 from torchvision import datasets, models, transforms
 
+def rgb_to_yuv(image: torch.Tensor) -> torch.Tensor:
+    if not isinstance(image, torch.Tensor):
+        raise TypeError(f"Input type is not a torch.Tensor. Got {type(image)}")
+
+    if len(image.shape) < 3 or image.shape[-3] != 3:
+        raise ValueError(f"Input size must have a shape of (*, 3, H, W). Got {image.shape}")
+
+    r: torch.Tensor = image[..., 0, :, :]
+    g: torch.Tensor = image[..., 1, :, :]
+    b: torch.Tensor = image[..., 2, :, :]
+
+    y: torch.Tensor = 0.299 * r + 0.587 * g + 0.114 * b
+    u: torch.Tensor = -0.147 * r - 0.289 * g + 0.436 * b
+    v: torch.Tensor = 0.615 * r - 0.515 * g - 0.100 * b
+
+    out: torch.Tensor = torch.stack([y, u, v], -3)
+
+    return out
+def color_loss(con, fake):
+    con = rgb_to_yuv(con).cuda()
+    fake = rgb_to_yuv(fake).cuda()
+
+    return F.l1_loss(con[:,0,:,:], fake[:,0,:,:]) + F.huber_loss(con[:,1,:,:],fake[:,1,:,:]) + F.huber_loss(con[:,2,:,:],fake[:,2,:,:]) 
+
 class LossNetwork(torch.nn.Module):
     def __init__(self, vgg_model):
         super(LossNetwork, self).__init__()
@@ -99,21 +123,27 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
             cycle_zebra = gen_Z(fake_horse)
             cycle_horse = gen_H(fake_zebra)
             # print(zebra.shape)
-            cycle_zebra_loss = l1(zebra, cycle_zebra)
-            cycle_horse_loss = l1(horse, cycle_horse)
+            # cycle_zebra_loss = l1(zebra, cycle_zebra)
+            # cycle_horse_loss = l1(horse, cycle_horse)
             # print(loss_G_Z)
             # print(zebra.shape)
             # print(vgg_loss_val)
             if vgg_loss_val:
-                print("using vgg loss")
-                cycle_zebra_loss, output_features = vgg_loss(zebra, cycle_zebra)
-                cycle_horse_loss, output_features = vgg_loss(horse, cycle_horse)
+                # print("using vgg loss")
+                cycle_zebra_loss, output_features = vgg_loss(cycle_zebra, zebra)
+                cycle_horse_loss, output_features = vgg_loss(cycle_horse, horse)
                 cycle_zebra_loss *= 100
                 cycle_horse_loss *= 100
+  
             else:
-                print("using l1 loss")
+                # print("using l1 loss")
                 cycle_zebra_loss = l1(zebra, cycle_zebra)
                 cycle_horse_loss = l1(horse, cycle_horse)
+            color_zebra_loss = color_loss(cycle_zebra,zebra)
+            color_horse_loss = color_loss(cycle_horse,horse)
+            # print(color_zebra_loss.get_device())
+            cycle_zebra_loss += color_zebra_loss.cpu()
+            cycle_horse_loss += color_horse_loss.cpu()
             # print(cycle_zebra_loss)
             # print(cycle_horse_loss)
             # print(vgg_loss_zebra)
@@ -138,7 +168,7 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
         g_scaler.step(opt_gen)
         g_scaler.update()
 
-        if idx % 200 == 0:
+        if idx % 100 == 0:
             save_image(fake_horse*0.5+0.5, f"saved_images/horse_{idx}.png")
             save_image(fake_zebra*0.5+0.5, f"saved_images/zebra_{idx}.png")
 
@@ -181,17 +211,17 @@ def main():
         )
 
     dataset = HorseZebraDataset(
-        root_horse=config.TRAIN_DIR+"/horses", root_zebra=config.TRAIN_DIR+"/zebras", transform=config.transforms
+        root_horse=config.TRAIN_DIR+"/arcane", root_zebra=config.TRAIN_DIR+"/real", transform=config.transforms
     )
-    val_dataset = HorseZebraDataset(
-       root_horse=config.VAL_DIR+"/horses", root_zebra=config.VAL_DIR+"/zebras", transform=config.transforms
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=1,
-        shuffle=False,
-        pin_memory=True,
-    )
+    # val_dataset = HorseZebraDataset(
+    #    root_horse=config.VAL_DIR+"/horses", root_zebra=config.VAL_DIR+"/zebras", transform=config.transforms
+    # )
+    # val_loader = DataLoader(
+    #     val_dataset,
+    #     batch_size=1,
+    #     shuffle=False,
+    #     pin_memory=True,
+    # )
     loader = DataLoader(
         dataset,
         batch_size=config.BATCH_SIZE,

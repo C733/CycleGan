@@ -63,7 +63,7 @@ class Generator(nn.Module):
 
 def test():
     img_channels = 3
-    img_size = 256
+    img_size = 512
     x = torch.randn((2, img_channels, img_size, img_size))
     gen = Generator(img_channels, 9)
     print(gen(x).shape)
