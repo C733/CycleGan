@@ -13,48 +13,43 @@ from discriminator_model import Discriminator
 from generator_model import Generator
 import torch.nn.functional as F
 from torchvision import datasets, models, transforms
+import numpy as np
+from PIL import Image
+import torch
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
-def rgb_to_yuv(image: torch.Tensor) -> torch.Tensor:
-    r"""Convert an RGB image to YUV.
+gen_Z = Generator(img_channels=3, num_residuals=9).to(config.DEVICE)
+gen_H = Generator(img_channels=3, num_residuals=9).to(config.DEVICE)
+opt_gen = optim.Adam(
+    list(gen_Z.parameters()) + list(gen_H.parameters()),
+    lr=config.LEARNING_RATE,
+    betas=(0.5, 0.999),
+)
+load_checkpoint(
+    config.CHECKPOINT_GEN_H, gen_H, opt_gen, config.LEARNING_RATE,
+)
+load_checkpoint(
+    config.CHECKPOINT_GEN_Z, gen_Z, opt_gen, config.LEARNING_RATE,
+)
+zebra_path = "WeChat Photo Editor_20220404195104.jpg"
+horse_path = "WeChat Photo Editor_20220404195104.jpg"
 
-    .. image:: _static/img/rgb_to_yuv.png
-
-    The image data is assumed to be in the range of (0, 1).
-
-    Args:
-        image: RGB Image to be converted to YUV with shape :math:`(*, 3, H, W)`.
-
-    Returns:
-        YUV version of the image with shape :math:`(*, 3, H, W)`.
-
-    Example:
-        >>> input = torch.rand(2, 3, 4, 5)
-        >>> output = rgb_to_yuv(input)  # 2x3x4x5
-    """
-    if not isinstance(image, torch.Tensor):
-        raise TypeError(f"Input type is not a torch.Tensor. Got {type(image)}")
-
-    if len(image.shape) < 3 or image.shape[-3] != 3:
-        raise ValueError(f"Input size must have a shape of (*, 3, H, W). Got {image.shape}")
-
-    r: torch.Tensor = image[..., 0, :, :]
-    g: torch.Tensor = image[..., 1, :, :]
-    b: torch.Tensor = image[..., 2, :, :]
-
-    y: torch.Tensor = 0.299 * r + 0.587 * g + 0.114 * b
-    u: torch.Tensor = -0.147 * r - 0.289 * g + 0.436 * b
-    v: torch.Tensor = 0.615 * r - 0.515 * g - 0.100 * b
-
-    out: torch.Tensor = torch.stack([y, u, v], -3)
-
-    return out
-def color_loss(con, fake):
-    con = rgb_to_yuv(con)
-    fake = rgb_to_yuv(fake)
-    print(con.shape)
-    return F.l1_loss(con[:,0,:,:], fake[:,0,:,:]) + F.huber_loss(con[:,1,:,:],fake[:,1,:,:]) + F.huber_loss(con[:,2,:,:],fake[:,2,:,:]) 
+zebra_img = np.array(Image.open(zebra_path).convert("RGB"))
+horse_img = np.array(Image.open(horse_path).convert("RGB"))
 
 
-x = torch.rand((1,3,256,256))
-y = torch.rand((1,3,256,256))
-print(color_loss(x,y))
+transforms = A.Compose(
+    [
+        A.Resize(width=256, height=256),
+        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], max_pixel_value=255),
+        ToTensorV2(),
+     ],
+    additional_targets={"image0": "image"},
+)
+augmentations = transforms(image=zebra_img, image0=horse_img)
+zebra_img = augmentations["image"]
+horse_img = augmentations["image0"]
+horse_img = horse_img.to(config.DEVICE)
+arcane_chongyu = gen_H(horse_img)
+save_image(arcane_chongyu*0.5+0.5, f"chongyu.png")

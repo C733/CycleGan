@@ -31,11 +31,11 @@ data_transforms = {
     ]),
 }
 
-data_dir = 'data'
+data_dir = 'arcane_data'
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                           data_transforms[x])
                   for x in ['train', 'val']}
-dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
+dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=16,
                                              shuffle=True, num_workers=4)
               for x in ['train', 'val']}
 dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
@@ -178,7 +178,7 @@ if __name__=='__main__':
 
     # imshow(out, title=[class_names[x] for x in classes])
 
-    # model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-    #                     num_epochs=3)
-    # torch.save(model_ft.state_dict(), "vgg_loss.pth")
+    model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                        num_epochs=3)
+    torch.save(model_ft.state_dict(), "vgg_loss.pth")
     visualize_model(model_ft)

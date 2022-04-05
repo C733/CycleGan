@@ -168,7 +168,7 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
         g_scaler.step(opt_gen)
         g_scaler.update()
 
-        if idx % 1000 == 0:
+        if idx % 100 == 0:
             save_image(fake_horse*0.5+0.5, f"saved_images/horse_{idx}.png")
             save_image(fake_zebra*0.5+0.5, f"saved_images/zebra_{idx}.png")
 
@@ -211,7 +211,7 @@ def main():
         )
 
     dataset = HorseZebraDataset(
-        root_horse=config.TRAIN_DIR+"/arcane", root_zebra=config.TRAIN_DIR+"/real", transform=config.transforms
+        root_horse=config.TRAIN_DIR+"/arcane_face", root_zebra=config.TRAIN_DIR+"/real_face", transform=config.transforms
     )
     # val_dataset = HorseZebraDataset(
     #    root_horse=config.VAL_DIR+"/horses", root_zebra=config.VAL_DIR+"/zebras", transform=config.transforms
@@ -225,7 +225,7 @@ def main():
     loader = DataLoader(
         dataset,
         batch_size=config.BATCH_SIZE,
-        shuffle=False,
+        shuffle=True,
         num_workers=config.NUM_WORKERS,
         pin_memory=True
     )
