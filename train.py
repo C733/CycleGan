@@ -52,7 +52,7 @@ class LossNetwork(torch.nn.Module):
     def output_features(self, x):
         output = {}
         for name, module in self.vgg_layers._modules.items():
-            #print("vgg_layers name:",name,module)
+            # print("vgg_layers name:",name,module)
             x = x.type(torch.FloatTensor)
             x = module(x)
             if name in self.layer_name_mapping:
@@ -62,13 +62,26 @@ class LossNetwork(torch.nn.Module):
 
     def forward(self, output, gt):
         loss = []
+        consistant_loss = []
         output_features = self.output_features(output)
         gt_features = self.output_features(gt)
         for iter,(dehaze_feature, gt_feature,loss_weight) in enumerate(zip(output_features, gt_features,self.weight)):
             loss.append(F.mse_loss(dehaze_feature, gt_feature)*loss_weight)
-        return sum(loss),output_features  #/len(loss)
+            consistant_loss.append(F.l1_loss(gram_matrix(dehaze_feature),gram_matrix(gt_feature))*loss_weight)
+        return sum(loss),sum(consistant_loss)  #/len(loss)
 
+def gram_matrix(input):
+    a, b, c, d = input.size()  # a=batch size(=1)
+    # b=number of feature maps
+    # (c,d)=dimensions of a f. map (N=c*d)
 
+    features = input.view(a * b, c * d)  # resise F_XL into \hat F_XL
+
+    G = torch.mm(features, features.t())  # compute the gram product
+
+    # we 'normalize' the values of the gram matrix
+    # by dividing by the number of element in each feature maps.
+    return G.div(a * b * c * d)
         
 def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d_scaler, g_scaler, vgg_loss_val):
     H_reals = 0
@@ -128,22 +141,28 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
             # print(loss_G_Z)
             # print(zebra.shape)
             # print(vgg_loss_val)
+            
             if vgg_loss_val:
                 # print("using vgg loss")
-                cycle_zebra_loss, output_features = vgg_loss(cycle_zebra, zebra)
-                cycle_horse_loss, output_features = vgg_loss(cycle_horse, horse)
+                # contant_zebra_loss, cycle1 = vgg_loss(fake_horse, zebra)
+                # contant_horse_loss, cycle2 = vgg_loss(fake_zebra, horse)
+                contant1, cycle_zebra_loss = vgg_loss(cycle_zebra, zebra)
+                contant2, cycle_horse_loss = vgg_loss(cycle_horse, horse)
+                # contant_zebra_loss *= 100
+                # contant_horse_loss *= 100
                 cycle_zebra_loss *= 100
                 cycle_horse_loss *= 100
-  
+                # print(contant_zebra_loss)
             else:
                 # print("using l1 loss")
                 cycle_zebra_loss = l1(zebra, cycle_zebra)
                 cycle_horse_loss = l1(horse, cycle_horse)
             color_zebra_loss = color_loss(cycle_zebra,zebra)
             color_horse_loss = color_loss(cycle_horse,horse)
-            # print(color_zebra_loss.get_device())
-            cycle_zebra_loss += color_zebra_loss.cpu()
-            cycle_horse_loss += color_horse_loss.cpu()
+            
+            # # print(color_zebra_loss.get_device())
+            # cycle_zebra_loss += color_zebra_loss.cpu()
+            # cycle_horse_loss += color_horse_loss.cpu()
             # print(cycle_zebra_loss)
             # print(cycle_horse_loss)
             # print(vgg_loss_zebra)
@@ -157,8 +176,14 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
             G_loss = (
                 loss_G_Z
                 + loss_G_H
-                + cycle_zebra_loss * config.LAMBDA_CYCLE
-                + cycle_horse_loss * config.LAMBDA_CYCLE
+                # + color_zebra_loss
+                # + color_horse_loss
+                # + contant_zebra_loss
+                # + contant_horse_loss
+                + cycle_zebra_loss
+                + cycle_horse_loss
+                # + cycle_zebra_loss * config.LAMBDA_CYCLE
+                # + cycle_horse_loss * config.LAMBDA_CYCLE
                 # + identity_horse_loss * config.LAMBDA_IDENTITY
                 # + identity_zebra_loss * config.LAMBDA_IDENTITY
             )

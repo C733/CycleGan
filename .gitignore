@@ -9,3 +9,5 @@ vgg_loss.pth
 /arcane_data
 /results
 /saved_images
+/arcane_face_data
+/badcase

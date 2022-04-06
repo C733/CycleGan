@@ -32,8 +32,8 @@ load_checkpoint(
 load_checkpoint(
     config.CHECKPOINT_GEN_Z, gen_Z, opt_gen, config.LEARNING_RATE,
 )
-zebra_path = "WeChat Photo Editor_20220404195104.jpg"
-horse_path = "WeChat Photo Editor_20220404195104.jpg"
+zebra_path = "WeChat Image_20220404202029.jpg"
+horse_path = "WeChat Image_20220404202029.jpg"
 
 zebra_img = np.array(Image.open(zebra_path).convert("RGB"))
 horse_img = np.array(Image.open(horse_path).convert("RGB"))
