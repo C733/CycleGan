@@ -190,23 +190,23 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
                     + cycle_horse_loss
                     # + cycle_zebra_loss * config.LAMBDA_CYCLE
                     # + cycle_horse_loss * config.LAMBDA_CYCLE
-                    + identity_horse_loss
-                    + identity_zebra_loss
+                    + identity_horse_loss * 0.5
+                    + identity_zebra_loss * 0.5
                 )
             else:
                 G_loss = (
                     loss_G_Z
                     + loss_G_H
-                    + color_zebra_loss
-                    + color_horse_loss
+                    # + color_zebra_loss
+                    # + color_horse_loss
                     # + contant_zebra_loss
                     # + contant_horse_loss
-                    + cycle_zebra_loss
-                    + cycle_horse_loss
+                    + cycle_zebra_loss * 10
+                    + cycle_horse_loss * 10 
                     # + cycle_zebra_loss * config.LAMBDA_CYCLE
                     # + cycle_horse_loss * config.LAMBDA_CYCLE
-                    + identity_horse_loss
-                    + identity_zebra_loss
+                    + identity_horse_loss * 0.5
+                    + identity_zebra_loss * 0.5
                 )
                 G_loss_total += float(G_loss)
         opt_gen.zero_grad()
