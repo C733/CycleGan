@@ -93,8 +93,6 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
     G_loss_total = 0
 
     for idx, (zebra, horse) in enumerate(loop):
-        if idx == 5:
-            break
         zebra = zebra.to(config.DEVICE)
         horse = horse.to(config.DEVICE)
         # print(zebra.shape)
