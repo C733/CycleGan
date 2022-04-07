@@ -27,13 +27,13 @@ opt_gen = optim.Adam(
     betas=(0.5, 0.999),
 )
 load_checkpoint(
-    config.CHECKPOINT_GEN_H, gen_H, opt_gen, config.LEARNING_RATE,
+    "pre_trained\model\l1+color\genh.pth.tar", gen_H, opt_gen, config.LEARNING_RATE,
 )
 load_checkpoint(
-    config.CHECKPOINT_GEN_Z, gen_Z, opt_gen, config.LEARNING_RATE,
+   "pre_trained\model\l1+color\genz.pth.tar", gen_Z, opt_gen, config.LEARNING_RATE,
 )
-zebra_path = "WeChat Image_20220404202029.jpg"
-horse_path = "WeChat Image_20220404202029.jpg"
+zebra_path = "test/girl.jpg"
+horse_path = "test/girl.jpg"
 
 zebra_img = np.array(Image.open(zebra_path).convert("RGB"))
 horse_img = np.array(Image.open(horse_path).convert("RGB"))
@@ -52,4 +52,6 @@ zebra_img = augmentations["image"]
 horse_img = augmentations["image0"]
 horse_img = horse_img.to(config.DEVICE)
 arcane_chongyu = gen_H(horse_img)
-save_image(arcane_chongyu*0.5+0.5, f"chongyu.png")
+save_image(arcane_chongyu*0.5+0.5, f"arcane_girl.png")
+real_chongyu = gen_Z(arcane_chongyu)
+save_image(real_chongyu*0.5+0.5, f"real_girl.png")

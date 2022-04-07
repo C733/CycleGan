@@ -195,12 +195,12 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
                 G_loss = (
                     loss_G_Z
                     + loss_G_H
-                    # + color_zebra_loss
-                    # + color_horse_loss
+                    + color_zebra_loss
+                    + color_horse_loss
                     # + contant_zebra_loss
                     # + contant_horse_loss
                     + cycle_zebra_loss * 10
-                    + cycle_horse_loss * 10 
+                    + cycle_horse_loss * 10
                     # + cycle_zebra_loss * config.LAMBDA_CYCLE
                     # + cycle_horse_loss * config.LAMBDA_CYCLE
                     + identity_horse_loss * 0.5
@@ -218,7 +218,7 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
 
         loop.set_postfix(H_real=H_reals/(idx+1), H_fake=H_fakes/(idx+1))
 
-    return D_loss_total / 5, G_loss_total / 5
+    return D_loss_total / len(loop), G_loss_total / len(loop)
 
 def main():
     disc_H = Discriminator(in_channels=3).to(config.DEVICE)
@@ -242,16 +242,16 @@ def main():
 
     if config.LOAD_MODEL:
         load_checkpoint(
-            config.CHECKPOINT_GEN_H, gen_H, opt_gen, config.LEARNING_RATE,
+            "pre_trained\model\l1+color\genh.pth.tar", gen_H, opt_gen, config.LEARNING_RATE,
         )
         load_checkpoint(
-            config.CHECKPOINT_GEN_Z, gen_Z, opt_gen, config.LEARNING_RATE,
+            "pre_trained\model\l1+color\genz.pth.tar",gen_Z, opt_gen, config.LEARNING_RATE,
         )
         load_checkpoint(
-            config.CHECKPOINT_CRITIC_H, disc_H, opt_disc, config.LEARNING_RATE,
+            "pre_trained\model\l1+color\critich.pth.tar", disc_H, opt_disc, config.LEARNING_RATE,
         )
         load_checkpoint(
-            config.CHECKPOINT_CRITIC_Z, disc_Z, opt_disc, config.LEARNING_RATE,
+            "pre_trained\model\l1+color\criticz.pth.tar", disc_Z, opt_disc, config.LEARNING_RATE,
         )
 
     dataset = HorseZebraDataset(
@@ -288,10 +288,10 @@ def main():
         loss_D.append(avg_D_loss)
         loss_G.append(avg_G_loss)
         if config.SAVE_MODEL:
-            save_checkpoint(gen_H, opt_gen, filename=config.CHECKPOINT_GEN_H)
-            save_checkpoint(gen_Z, opt_gen, filename=config.CHECKPOINT_GEN_Z)
-            save_checkpoint(disc_H, opt_disc, filename=config.CHECKPOINT_CRITIC_H)
-            save_checkpoint(disc_Z, opt_disc, filename=config.CHECKPOINT_CRITIC_Z)
+            save_checkpoint(gen_H, opt_gen, filename="pre_trained\model\l1+color\genh.pth.tar")
+            save_checkpoint(gen_Z, opt_gen, filename="pre_trained\model\l1+color\genz.pth.tar")
+            save_checkpoint(disc_H, opt_disc, filename="pre_trained\model\l1+color\critich.pth.tar")
+            save_checkpoint(disc_Z, opt_disc, filename= "pre_trained\model\l1+color\criticz.pth.tar")
     x_axix = range(config.NUM_EPOCHS)
     plt.figure(0)
     plt.title('Discriminator loss')

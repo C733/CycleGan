@@ -11,3 +11,5 @@ vgg_loss.pth
 /saved_images
 /arcane_face_data
 /badcase
+/pre_trained
+/test
