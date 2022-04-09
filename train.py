@@ -14,7 +14,7 @@ from generator_model import Generator
 import torch.nn.functional as F
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
-
+import numpy as np
 def rgb_to_yuv(image: torch.Tensor) -> torch.Tensor:
     if not isinstance(image, torch.Tensor):
         raise TypeError(f"Input type is not a torch.Tensor. Got {type(image)}")
@@ -44,10 +44,6 @@ class LossNetwork(torch.nn.Module):
         super(LossNetwork, self).__init__()
         self.vgg_layers = vgg_model
         self.layer_name_mapping = {
-            '3': "relu1_2",
-            '8': "relu2_2",
-            '13': "relu3_2",
-            '22': "relu4_2",
             '31': "relu5_2"
         }
         self.weight =[1.0,1.0,1.0,1.0,1.0]
@@ -64,13 +60,13 @@ class LossNetwork(torch.nn.Module):
 
     def forward(self, output, gt):
         loss = []
-        consistant_loss = []
+        # consistant_loss = []
         output_features = self.output_features(output)
         gt_features = self.output_features(gt)
         for iter,(dehaze_feature, gt_feature,loss_weight) in enumerate(zip(output_features, gt_features,self.weight)):
             loss.append(F.mse_loss(dehaze_feature, gt_feature)*loss_weight)
-            consistant_loss.append(F.l1_loss(gram_matrix(dehaze_feature),gram_matrix(gt_feature))*loss_weight)
-        return sum(consistant_loss),sum(loss)  #/len(loss)
+            # consistant_loss.append(F.l1_loss(gram_matrix(dehaze_feature),gram_matrix(gt_feature))*loss_weight)
+        return sum(loss)  #/len(loss)
 
 def gram_matrix(input):
     a, b, c, d = input.size()  # a=batch size(=1)
@@ -91,7 +87,7 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
     loop = tqdm(loader, leave=True)
     D_loss_total = 0
     G_loss_total = 0
-
+    style_loss = 0
     for idx, (zebra, horse) in enumerate(loop):
         zebra = zebra.to(config.DEVICE)
         horse = horse.to(config.DEVICE)
@@ -143,25 +139,25 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
             if vgg_loss_val:
                 # print("using vgg loss")
                 # style texture loss
-                contant_zebra_loss, cycle1 = vgg_loss(fake_zebra, zebra)
-                contant_horse_loss, cycle2 = vgg_loss(fake_horse, horse)
+                # contant_zebra_loss, cycle1 = vgg_loss(fake_zebra, zebra)
+                # contant_horse_loss, cycle2 = vgg_loss(fake_horse, horse)
                 # cycle consistancy feature loss
-                contant1, cycle_zebra_loss = vgg_loss(cycle_zebra, zebra)
-                contant2, cycle_horse_loss = vgg_loss(cycle_horse, horse)
-                contant_zebra_loss *= 1000
-                contant_horse_loss *= 1000
-                cycle_zebra_loss *= 10
-                cycle_horse_loss *= 10
-                # print(cycle_zebra_loss)
-                # print(contant_zebra_loss)
+                style_zebra_loss = vgg_loss(fake_zebra, zebra)
+                style_horse_loss = vgg_loss(fake_horse, horse)
+                cycle_zebra_loss = l1(zebra, cycle_zebra)
+                cycle_horse_loss = l1(horse, cycle_horse)
+            
+                # contant_zebra_loss *= 1000
+                # contant_horse_loss *= 1000
+                
             else:
                 # print("using l1 loss")
                 # cycle consistancy normal loss
                 cycle_zebra_loss = l1(zebra, cycle_zebra)
                 cycle_horse_loss = l1(horse, cycle_horse)
             
-            color_zebra_loss = color_loss(cycle_zebra,zebra)
-            color_horse_loss = color_loss(cycle_horse,horse)
+            # color_zebra_loss = color_loss(cycle_zebra,zebra)
+            # color_horse_loss = color_loss(cycle_horse,horse)
             # print(color_horse_loss)
             # # print(color_zebra_loss.get_device())
             # cycle_zebra_loss += color_zebra_loss.cpu()
@@ -180,23 +176,22 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
                 G_loss = (
                     loss_G_Z
                     + loss_G_H
-                    + color_zebra_loss
-                    + color_horse_loss
-                    + contant_zebra_loss
-                    + contant_horse_loss
-                    + cycle_zebra_loss
-                    + cycle_horse_loss
+                    + style_zebra_loss * 100
+                    + style_horse_loss * 100
+                    + cycle_zebra_loss * 10
+                    + cycle_horse_loss * 10
                     # + cycle_zebra_loss * config.LAMBDA_CYCLE
                     # + cycle_horse_loss * config.LAMBDA_CYCLE
                     + identity_horse_loss * 0.5
                     + identity_zebra_loss * 0.5
                 )
+                style_loss += (float(style_zebra_loss * 100) + float(style_horse_loss * 100)) / 2
             else:
                 G_loss = (
                     loss_G_Z
                     + loss_G_H
-                    + color_zebra_loss
-                    + color_horse_loss
+                    # + color_zebra_loss
+                    # + color_horse_loss
                     # + contant_zebra_loss
                     # + contant_horse_loss
                     + cycle_zebra_loss * 10
@@ -206,7 +201,7 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
                     + identity_horse_loss * 0.5
                     + identity_zebra_loss * 0.5
                 )
-                G_loss_total += float(G_loss)
+            G_loss_total += float(G_loss)
         opt_gen.zero_grad()
         g_scaler.scale(G_loss).backward()
         g_scaler.step(opt_gen)
@@ -218,7 +213,7 @@ def train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, l1, mse, d
 
         loop.set_postfix(H_real=H_reals/(idx+1), H_fake=H_fakes/(idx+1))
 
-    return D_loss_total / len(loop), G_loss_total / len(loop)
+    return D_loss_total / len(loop), G_loss_total / len(loop), style_loss / len(loop)
 
 def main():
     disc_H = Discriminator(in_channels=3).to(config.DEVICE)
@@ -277,6 +272,7 @@ def main():
     d_scaler = torch.cuda.amp.GradScaler()
     loss_D = []
     loss_G = []
+    loss_style = []
     vgg_model = models.vgg19(pretrained=False).features[:]
     vgg_model.load_state_dict(torch.load('vgg_loss.pth'),strict=False)
     vgg_model.eval()
@@ -284,29 +280,36 @@ def main():
         param.requires_grad = False 
     vgg_loss = LossNetwork(vgg_model)
     for epoch in range(config.NUM_EPOCHS):
-        avg_D_loss, avg_G_loss =  train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, L1, mse, d_scaler, g_scaler,vgg_loss,vgg_loss_val=False)
+        avg_D_loss, avg_G_loss, style_loss =  train_fn(disc_H, disc_Z, gen_Z, gen_H, loader, opt_disc, opt_gen, L1, mse, d_scaler, g_scaler,vgg_loss,vgg_loss_val=True)
         loss_D.append(avg_D_loss)
         loss_G.append(avg_G_loss)
+        loss_style.append(style_loss)
         if config.SAVE_MODEL:
-            save_checkpoint(gen_H, opt_gen, filename="pre_trained\model\l1+color\genh.pth.tar")
-            save_checkpoint(gen_Z, opt_gen, filename="pre_trained\model\l1+color\genz.pth.tar")
-            save_checkpoint(disc_H, opt_disc, filename="pre_trained\model\l1+color\critich.pth.tar")
-            save_checkpoint(disc_Z, opt_disc, filename= "pre_trained\model\l1+color\criticz.pth.tar")
-    x_axix = range(config.NUM_EPOCHS)
-    plt.figure(0)
-    plt.title('Discriminator loss')
-    plt.plot(x_axix, loss_D, color='red',label='Discriminator loss')
-    plt.legend()
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.savefig('./result.png')
-    plt.figure(1)
-    plt.title('Generateor loss')
-    plt.plot(x_axix, loss_G, color='green',label='Generator loss')
-    plt.legend()
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.savefig('./result1.png')
+            save_checkpoint(gen_H, opt_gen, filename="pre_trained\model\l1+style\genh.pth.tar")
+            save_checkpoint(gen_Z, opt_gen, filename="pre_trained\model\l1+style\genz.pth.tar")
+            save_checkpoint(disc_H, opt_disc, filename="pre_trained\model\l1+style\critich.pth.tar")
+            save_checkpoint(disc_Z, opt_disc, filename= "pre_trained\model\l1+style\criticz.pth.tar")
+    loss_D = np.array(loss_D)
+    loss_G = np.array(loss_G)
+    style_loss = np.array(style_loss)
+    np.savetxt('loss_D.txt', loss_D)
+    np.savetxt('loss_G.txt', loss_G)
+    np.savetxt('style_loss.txt', style_loss)
+    # x_axix = range(config.NUM_EPOCHS)
+    # plt.figure(0)
+    # plt.title('Discriminator loss')
+    # plt.plot(x_axix, loss_D, color='red',label='Discriminator loss')
+    # plt.legend()
+    # plt.xlabel('epoch')
+    # plt.ylabel('loss')
+    # plt.savefig('./result.png')
+    # plt.figure(1)
+    # plt.title('Generateor loss')
+    # plt.plot(x_axix, loss_G, color='green',label='Generator loss')
+    # plt.legend()
+    # plt.xlabel('epoch')
+    # plt.ylabel('loss')
+    # plt.savefig('./result1.png')
 
 
 if __name__ == "__main__":
